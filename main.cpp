@@ -571,13 +571,13 @@ int main()
 {
     //freopen("src/expr.data","r",stdin);
     //freopen("src/naive.data","r",stdin);
-    freopen("src/array_test1.data","r",stdin);
+    //freopen("src/array_test1.data","r",stdin);
     mem.getprogram();
     //mem.show();
     while(1){
         unsigned int instcode=IF(reg.pc);
         instruction *inst=parse(instcode);
-        cerr<<hex<<reg.pc<<":"<<instcode<<"\t";inst->show();
+        //cerr<<hex<<reg.pc<<":"<<instcode<<"\t";inst->show();
         if(inst->EX())  reg.pc+=4;
     }
     return 0;
