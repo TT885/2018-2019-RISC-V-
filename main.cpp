@@ -21,6 +21,7 @@ class memory
 public:
     unsigned char* a;
     memory(){ a=new unsigned char[maxn]; for(int i=0;i<maxn;++i) a[i]=0;}
+    ~memory() {delete []a;}
     unsigned char &operator[](unsigned int x)
     {
         return a[x];
@@ -579,6 +580,7 @@ int main()
         instruction *inst=parse(instcode);
         //cerr<<hex<<reg.pc<<":"<<instcode<<"\t";inst->show();
         if(inst->EX())  reg.pc+=4;
+        delete inst;
     }
     return 0;
 }
