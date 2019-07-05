@@ -1,6 +1,5 @@
 #include <bits/stdc++.h>
 using namespace std;
-//指令名称，rs1,rs2,rd解析基本正确，立即数解析错误
 
 const int maxn=0x400000;//4M memory
 class registers
@@ -19,7 +18,7 @@ string regname[32]={"zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0",
 class memory
 {
 public:
-    unsigned char* a;
+    unsigned char*  a;
     memory(){ a=new unsigned char[maxn]; for(int i=0;i<maxn;++i) a[i]=0;}
     ~memory() {delete []a;}
     unsigned char &operator[](unsigned int x)
@@ -35,7 +34,7 @@ public:
                 position=0;
                 int len=strlen(inst);
                 for(int i=1;i<len;++i)
-                    position=(position<<4)+(inst[i]>='0'&&inst[i]<='9'?inst[i]-'0':10+inst[i]-'A'); //问题就在此处！
+                    position=(position<<4)+(inst[i]>='0'&&inst[i]<='9'?inst[i]-'0':10+inst[i]-'A'); //������ڴ˴���
             }
             else{
                 for(int i=0;i<2;++i)
@@ -60,527 +59,220 @@ inline unsigned int IF(int pc)
     return (mem[pc+3]<<24)+(mem[pc+2]<<16)+(mem[pc+1]<<8)+mem[pc];
 }
 
-/*enum instruction_type{LUI,AUIPC,JAL,   //3
-JALR,LB,LH,LW,LBV,LHU,ADDI,SLTI,SLTIU,XORI,ORI,ANDI,SLLI,SRLI,SRAI,  //18
+enum OptionType{R,I,U,J,S,B};
+enum instruction_type{LUI,AUIPC,JAL,   //3
+JALR,LB,LH,LW,LBU,LHU,ADDI,SLTI,SLTIU,XORI,ORI,ANDI,SLLI,SRLI,SRAI,  //18
 ADD,SUB,SLL,SLT,SLTU,XOR,SRL,SRA,OR,AND,    //28
 BEQ,BNE,BLT,BGE,BLTU,BGEU,SB,SH,SW};    //37
-//*/
+string instructiontype[37]={"LUI","AUIPC","JAL",
+"JALR","LB","LH","LW","LBU","LHU","ADDI","SLTI","SLTIU","XORI","ORI","ANDI","SLLI","SRLI","SRAI",  //18
+"ADD","SUB","SLL","SLT","SLTU","XOR","SRL","SRA","OR","AND",
+"BEQ","BNE","BLT","BGE","BLTU","BGEU","SB","SH","SW"};
 
 class instruction
 {
-    friend instruction* parse(unsigned int instcode);
-protected:
-    unsigned int rd,rs1,rs2,imm;
+    friend instruction  ID(unsigned int instcode);
+    unsigned int rd,rs1,rs2,imm,tmp1,tmp2,res,respc;
+    bool flag;
+    OptionType       opttype;
+    instruction_type insttype;
+    void judgeend()
+    {
+        if(res==0x30004){
+            cout<<dec<<(int)(reg[10]&255);
+            exit(0);
+        }
+    }
 public:
-    virtual int EX()=0;
-    virtual void show()=0;
-};
+    instruction():flag(0){}
+    void show()
+    {
+        cout<<instructiontype[insttype]<<" ";
 
-class LUI:public instruction
-{
-public:
-    int EX()
-    {
-        reg[rd]=imm;
-        //cerr<<"寄存器得到的值："<<reg[rd]<<"\n";
-        return 1; //是否跳转
-    }
-    void show(){cout<<"LUI rd="<<regname[rd];cout<<hex<<" imm="<<imm<<"\n"<<dec;}
-};
-
-class AUIPC:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=imm+reg.pc;
-        return 1; //是否跳转
-    }
-    void show(){cout<<"AUIPC rd="<<regname[rd];cout<<hex<<" imm="<<imm<<"\n"<<dec;}
-};
-class JAL:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg.pc+4;
-        reg.pc+=imm;
-        return 0; //是否跳转
-    }
-    void show(){cout<<"JAL rd="<<regname[rd];cout<<hex<<" imm="<<imm<<"\n"<<dec;}
-};
-class JALR:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg.pc+4;
-        reg.pc=reg[rs1]+imm;
-        return 0; //是否跳转
-    }
-    void show(){cout<<"JALR rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-
-class BEQ:public instruction
-{
-    int EX()
-    {
-        if(reg[rs1]==reg[rs2]){
-            reg.pc+=imm;return 0;
+        //cerr<<"rd="<<rd<<" imm="<<imm<<" rs1="<<rs1<<" rs2="<<rs2<<"\n";
+        switch(opttype)
+        {
+            case U:
+            case J:cout<<hex<<"rd="<<regname[rd]<<" imm="<<imm<<"\n";break;
+            case B:
+            case S:cout<<hex<<"imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";break;
+            case I:cout<<hex<<"rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";break;
+            case R:cout<<hex<<"rd="<<regname[rd]<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";break;
         }
-        return 1; //是否跳转
     }
-    void show(){cout<<"BEQ imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-};
-
-class BNE:public instruction
-{
-    int EX()
+    void EX()
     {
-        if(reg[rs1]!=reg[rs2]){
-            reg.pc+=imm;return 0;
+        switch(insttype){
+        case LUI:   res=imm;break;
+        case AUIPC: res=respc+imm;break;
+        case JAL:   res=respc+4;respc+=imm; flag=1;break;
+        case JALR:  res=respc+4;respc=tmp1+imm;flag=1;break; //pc��ת������JAL��ȫ��ͬ
+        case LB:
+        case LH:
+        case LW:
+        case LBU:
+        case LHU:
+        case SB:
+        case SH:
+        case SW:    res=tmp1+imm;break;
+        case ADDI:  res=tmp1+imm;break;
+        case SLTI:  res=(int)tmp1<(int)imm;break;
+        case SLTIU: res=(unsigned int)tmp1<(unsigned int)imm;break;
+        case XORI:  res=tmp1^imm;break;
+        case ORI:   res=tmp1|imm;break;
+        case ANDI:  res=tmp1&imm;break;
+        case SLLI:  res=tmp1<<imm;break;
+        case SRLI:  res=(unsigned int)tmp1>>imm;break;
+        case SRAI:  res=(int)tmp1>>imm;break;
+        case ADD:   res=tmp1+tmp2;break;
+        case SUB:   res=tmp1-tmp2;break;
+        case SLL:   res=tmp1<<tmp2;break;
+        case SLT:   res=tmp1<tmp2;break;
+        case SLTU:  res=(unsigned int)tmp1<(unsigned int)tmp2;break;
+        case XOR:   res=tmp1^tmp2;break;
+        case SRL:   res=(unsigned int)tmp1>>tmp2;break;
+        case SRA:   res=(int)tmp1>>tmp2;break;
+        case OR:    res=tmp1|tmp2;break;
+        case AND:   res=tmp1&tmp2;break;
+        case BEQ:   flag=tmp1==tmp2;if(flag) respc+=imm;break;
+        case BNE:   flag=tmp1!=tmp2;if(flag) respc+=imm;break;
+        case BLT:   flag=(int)tmp1<(int)tmp2;if(flag) respc+=imm;break;
+        case BGE:   flag=(int)tmp1>=(int)tmp2;if(flag) respc+=imm;break;
+        case BLTU:  flag=(unsigned int)tmp1<(unsigned int)tmp2;if(flag) respc+=imm;break;
+        case BGEU:  flag=(unsigned int)tmp1>=(unsigned int)tmp2;if(flag) respc+=imm;break;
         }
-        return 1; //是否跳转
     }
-    void show(){cout<<"BNE imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-};
-class BGE:public instruction
-{
-    int EX()
+    void MA()
     {
-        if((int)reg[rs1]>=(int)reg[rs2]){
-            reg.pc+=imm;return 0;
+        //if((insttype==SB1 ||insttype==SH1||insttype==SW1) && res<=1000) cerr<<"warning!\n\n\n";
+        switch(insttype){
+        case LB: if(rd) res=mem[res],signedExtend(res,8);break;
+        case LBU:if(rd) res=mem[res]; break;
+        case LH: if(rd) res=mem[res]+(mem[res+1]<<8),signedExtend(res,16); break;
+        case LHU:if(rd) res=mem[res]+(mem[res+1]<<8);break;
+        case LW: if(rd) res=mem[res]+(mem[res+1]<<8)+(mem[res+2]<<16)+(mem[res+3]<<24);break;
+        case SB: judgeend();mem[res]=tmp2&255;break;
+        case SH: judgeend();mem[res]=tmp2&255;mem[res+1]=(tmp2>>8)&255;break;
+        case SW: judgeend();mem[res]=tmp2&255;mem[res+1]=(tmp2>>8)&255;mem[res+2]=(tmp2>>16)&255;mem[res+3]=(tmp2>>24)&255;break;
+        default:;
         }
-        return 1;
     }
-    void show(){cout<<"BGE imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
+    void WB()
+    {
+        if(opttype!=S && opttype!=B &&rd)
+            reg[rd]=res;
+        reg.pc=(flag?respc:reg.pc+4);
+    }
 };
 
-class BGEU:public instruction
+instruction  ID (unsigned int instcode)  //����ָ�룬��̬ʵ��
 {
-    int EX()
-    {
-        if((unsigned)reg[rs1]>=(unsigned)reg[rs2]){
-            reg.pc+=imm;return 0;
-        }
-        return 1;
-    }
-    void show(){cout<<"BGEU imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-};
-class BLT:public instruction
-{
-    int EX()
-    {
-        if((int)reg[rs1]<(int)reg[rs2]){
-            reg.pc+=imm;return 0;
-        }
-        return 1;
-    }
-    void show(){cout<<"BLT imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-};
-class BLTU:public instruction
-{
-    int EX()
-    {
-        if((unsigned)reg[rs1]<(unsigned)reg[rs2]){
-            reg.pc+=imm;return 0;
-        }
-        return 1;
-    }
-    void show(){cout<<"BLTU imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-}; //B类型
-
-class LB:public instruction
-{
-    int EX()
-    {
-        if(rd){
-            reg[rd]=mem[reg[rs1]+imm];
-            signedExtend(reg[rd],8);
-        }
-        return 1;
-    }
-    void show(){cout<<"LB rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class LBU:public instruction
-{
-    int EX()
-    {
-        if(rd)
-            reg[rd]=mem[reg[rs1]+imm];
-        return 1;
-    }
-    void show(){cout<<"LBU rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class LH:public instruction
-{
-    int EX()
-    {
-        if(rd){
-            reg[rd]=mem[reg[rs1]+imm]+(mem[reg[rs1]+imm+1]<<8);
-            signedExtend(reg[rd],16);
-        }
-        return 1;
-    }
-    void show(){cout<<"LH rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class LHU:public instruction
-{
-    int EX()
-    {
-        if(rd)
-            reg[rd]=mem[reg[rs1]+imm]+(mem[reg[rs1]+imm+1]<<8);
-        return 1;
-    }
-    void show(){cout<<"LHU rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class LW:public instruction
-{
-    int EX()
-    {
-        if(rd)
-            reg[rd]=mem[reg[rs1]+imm]+(mem[reg[rs1]+imm+1]<<8)+(mem[reg[rs1]+imm+2]<<16)+(mem[reg[rs1]+imm+3]<<24);
-
-        return 1;
-    }
-    void show(){cout<<"LW rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-
-
-
-
-
-
-
-
-
-
-
-
-class SB:public instruction
-{
-    int EX()
-    {
-        int po=reg[rs1]+imm;
-        if(po==0x30004){
-            cout<<(int)(reg[10]&255);//Wrong
-            exit(0);
-        }
-        mem[po]=reg[rs2]&255;
-        return 1;
-    }
-    void show(){cout<<"SB imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-};
-class SH:public instruction
-{
-    int EX()
-    {
-        int po=reg[rs1]+imm;
-        if(po==0x30004){
-            cout<<(int)(reg[10]&255);//Wrong
-            exit(0);
-        }
-        mem[po]=reg[rs2]&255;mem[po+1]=(reg[rs2]>>8)&255;
-        return 1;
-    }
-    void show(){cout<<"SH imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-};
-class SW:public instruction
-{
-    int EX()
-    {
-        int po=reg[rs1]+imm;
-        if(po==0x30004){
-            cout<<(int)(reg[10]&255);//Wrong
-            exit(0);
-        }
-        mem[po]=reg[rs2]&255;mem[po+1]=(reg[rs2]>>8)&255;mem[po+2]=(reg[rs2]>>16)&255;mem[po+3]=(reg[rs2]>>24)&255;
-        return 1;
-    }
-    void show(){cout<<"SW imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";}
-};
-
-
-
-
-
-
-
-
-
-
-
-
-class ADDI:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]+imm;
-        return 1;
-    }
-    void show(){cout<<"ADDI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class ADD:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]+reg[rs2];
-        return 1;
-    }
-
-    void show(){cout<<"ADD rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SUB:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]-reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"SUB rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-
-};
-class ANDI:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]&imm;
-        return 1;
-    }
-    void show(){cout<<"ANDI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class AND:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]&reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"AND rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-class XORI:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]^imm;
-        return 1;
-    }
-    void show(){cout<<"XORI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class XOR:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]^reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"XOR rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-
-};
-class ORI:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]|imm;
-        return 1;
-    }
-    void show(){cout<<"ORI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class OR:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]|reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"OR rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SLLI:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]<<imm;
-        return 1;
-    }
-    void show(){cout<<"SLLI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SLL:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]<<reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"SLL rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SRLI:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]>>imm;
-        return 1;
-    }
-    void show(){cout<<"SRLI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SRL:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=reg[rs1]>>reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"SRL rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SRAI:public instruction //算术右移，负数左边补1
-{
-    int EX()
-    {
-        if(rd) reg[rd]=(int)reg[rs1]>>imm; //会先类型准换的
-        return 1;
-    }
-    void show(){cout<<"SRAI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SRA:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=(int)reg[rs1]>>reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"SRA rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SLTI:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=(int)reg[rs1]<(int)imm;
-        return 1;
-    }
-    void show(){cout<<"SLTI rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SLT:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=(int)reg[rs1]<(int)reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"SLT rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SLTIU:public instruction
-{
-    int EX()
-    {
-        if(rd) reg[rd]=(unsigned int)reg[rs1]<(unsigned int)imm;
-        return 1;
-    }
-    void show(){cout<<"SLTIU rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";}
-};
-class SLTU:public instruction
-{
-    int EX()
-    {
-        if(rd)  reg[rd]=(unsigned int)reg[rs1]<(unsigned int)reg[rs2];
-        return 1;
-    }
-    void show(){cout<<"SLTU rd="<<regname[rd]<<" rs2="<<regname[rs2]<<" rs1="<<regname[rs1]<<"\n";}
-};
-
-instruction* parse (unsigned int instcode)  //基类指针，多态实现
-{
-    instruction *inst;
+    instruction  inst;
     int optc=instcode&127,func=(instcode>>12)&7;
-    enum {R,I,U,J,S,B} opttype;
     switch(optc){
-        case 55: inst=new LUI;  opttype=U;break;
-        case 23: inst=new AUIPC;opttype=U;break;
-        case 111:inst=new JAL;  opttype=J;break;
-        case 103:inst=new JALR; opttype=I;break;
+        case 55: inst.insttype= LUI;  inst.opttype=U;break;
+        case 23: inst.insttype= AUIPC;inst.opttype=U;break;
+        case 111:inst.insttype= JAL;  inst.opttype=J;break;
+        case 103:inst.insttype= JALR; inst.opttype=I;break;
         case 99:switch(func){
-            case 0:inst=new BEQ;break;
-            case 1:inst=new BNE;break;
-            case 4:inst=new BLT;break;
-            case 5:inst=new BGE;break;
-            case 6:inst=new BLTU;break;
-            case 7:inst=new BGEU;break;
-        }opttype=B;break;
+            case 0:inst.insttype= BEQ;break;
+            case 1:inst.insttype= BNE;break;
+            case 4:inst.insttype= BLT;break;
+            case 5:inst.insttype= BGE;break;
+            case 6:inst.insttype= BLTU;break;
+            case 7:inst.insttype= BGEU;break;
+        }inst.opttype=B;break;
         case 3:switch(func){
-            case 0:inst=new LB;break;
-            case 1:inst=new LH;break;
-            case 2:inst=new LW;break;
-            case 4:inst=new LBU;break;
-            case 5:inst=new LHU;break;
-        }opttype=I;break;
+            case 0:inst.insttype= LB;break;
+            case 1:inst.insttype= LH;break;
+            case 2:inst.insttype= LW;break;
+            case 4:inst.insttype= LBU;break;
+            case 5:inst.insttype= LHU;break;
+        }inst.opttype=I;break;
         case 35:switch(func){
-            case 0:inst=new SB;break;
-            case 1:inst=new SH;break;
-            case 2:inst=new SW;break;
-        }opttype=S;break;
+            case 0:inst.insttype= SB;break;
+            case 1:inst.insttype= SH;break;
+            case 2:inst.insttype= SW;break;
+        }inst.opttype=S;break;
         case 19:switch(func){
-            case 0:inst=new ADDI;break;
-            case 2:inst=new SLTI;break;
-            case 3:inst=new SLTIU;break;
-            case 4:inst=new XORI;break;
-            case 6:inst=new ORI;break;
-            case 7:inst=new ANDI;break;
-            case 1:inst=new SLLI;break;
-            case 5:(instcode>>30)?inst=new SRAI:inst=new SRLI;break;
-        }opttype=I;break;
+            case 0:inst.insttype= ADDI;break;
+            case 2:inst.insttype= SLTI;break;
+            case 3:inst.insttype= SLTIU;break;
+            case 4:inst.insttype= XORI;break;
+            case 6:inst.insttype= ORI;break;
+            case 7:inst.insttype= ANDI;break;
+            case 1:inst.insttype= SLLI;break;
+            case 5:(instcode>>30)?inst.insttype= SRAI:inst.insttype= SRLI;break;
+        }inst.opttype=I;break;
         case 51:switch(func){
-            case 0:(instcode>>30)?inst=new SUB:inst=new ADD;break;
-            case 1:inst=new SLL; break;
-            case 2:inst=new SLT; break;
-            case 3:inst=new SLTU;break;
-            case 4:inst=new XOR; break;
-            case 5:(instcode>>30)?inst=new SRA:inst=new SRL;break;
-            case 6:inst=new OR; break;
-            case 7:inst=new AND;break;
-        }opttype=R;break;
+            case 0:(instcode>>30)?inst.insttype= SUB:inst.insttype= ADD;break;
+            case 1:inst.insttype= SLL; break;
+            case 2:inst.insttype= SLT; break;
+            case 3:inst.insttype= SLTU;break;
+            case 4:inst.insttype= XOR; break;
+            case 5:(instcode>>30)?inst.insttype= SRA:inst.insttype= SRL;break;
+            case 6:inst.insttype= OR; break;
+            case 7:inst.insttype= AND;break;
+        }inst.opttype=R;break;
     }
-
-    switch(opttype){
-    case U: inst->rd=(instcode>>7)&31;
-    inst->imm=((instcode>>12)&0xfffff)<<12;break;
-
-    case J: inst->rd=(instcode>>7)&31;
-    inst->imm= (instcode>>20)&2046;         inst->imm+=((instcode>>20)&1)<<11;
-    inst->imm+=((instcode>>12)&255)<<12;    inst->imm+=((instcode>>31)&1)<<20;
-    //cerr<<hex<<((instcode>>21)&1023)<<" "<<(((instcode>>20)&1)<<11)<<" "<<(((instcode>>12)&255)<<12)<<" "<<(((instcode>>31)&1)<<20)<<endl;
-    signedExtend(inst->imm,20);break;
-
-    case I: inst->rd=(instcode>>7)&31;
-    inst->rs1=(instcode>>15)&31;
-    inst->imm=(instcode>>20)&4095;
-    signedExtend(inst->imm,11);break;
-
-    case B:inst->rs1=(instcode>>15)&31;
-    inst->rs2=(instcode>>20)&31;
-    inst->imm=(instcode>>7)&30;inst->imm+=((instcode>>7)&1)<<11;inst->imm+=((instcode>>25)&63)<<5;inst->imm+=((instcode>>31)&1)<<12;
-    signedExtend(inst->imm,12);break;
-
-    case S: inst->rs1=(instcode>>15)&31;
-    inst->rs2=(instcode>>20)&31;
-    inst->imm=(instcode>>7)&31;inst->imm+=((instcode>>25)&127)<<5;//optcode抠掉！！
-    signedExtend(inst->imm,11);break;
-
-    case R: inst->rd=(instcode>>7)&31;
-    inst->rs1=(instcode>>15)&31;
-    inst->rs2=(instcode>>20)&31;
-    inst->imm=inst->rs2;break;/*for SRLI SLLI SRAI only*/
+    inst.respc=reg.pc;
+    switch(inst.opttype){
+    case U: inst.rd=(instcode>>7)&31;
+    inst.imm=((instcode>>12)&0xfffff)<<12;
+    break;
+    case J: inst.rd=(instcode>>7)&31;
+    inst.imm= (instcode>>20)&2046;         inst.imm+=((instcode>>20)&1)<<11;
+    inst.imm+=((instcode>>12)&255)<<12;    inst.imm+=((instcode>>31)&1)<<20;
+    signedExtend(inst.imm,20);
+    break;
+    case I: inst.rd=(instcode>>7)&31;
+    inst.rs1=(instcode>>15)&31;
+    inst.imm=(instcode>>20)&4095;
+    signedExtend(inst.imm,11);
+    inst.tmp1=reg[inst.rs1];
+    break;
+    case B:inst.rs1=(instcode>>15)&31;
+    inst.rs2=(instcode>>20)&31;
+    inst.imm=(instcode>>7)&30;inst.imm+=((instcode>>7)&1)<<11;inst.imm+=((instcode>>25)&63)<<5;inst.imm+=((instcode>>31)&1)<<12;
+    signedExtend(inst.imm,12);
+    inst.tmp1=reg[inst.rs1];
+    inst.tmp2=reg[inst.rs2];
+    break;
+    case S: inst.rs1=(instcode>>15)&31;
+    inst.rs2=(instcode>>20)&31;
+    inst.imm=(instcode>>7)&31;inst.imm+=((instcode>>25)&127)<<5;//optcode�ٵ�����
+    signedExtend(inst.imm,11);
+    inst.tmp1=reg[inst.rs1];
+    inst.tmp2=reg[inst.rs2];
+    break;
+    case R: inst.rd=(instcode>>7)&31;
+    inst.rs1=(instcode>>15)&31;
+    inst.rs2=(instcode>>20)&31;
+    inst.imm=inst.rs2;
+    inst.tmp1=reg[inst.rs1];
+    inst.tmp2=reg[inst.rs2];
+    break;
     }
     return inst;
 }
 
 int main()
 {
+    ios::sync_with_stdio(0);cin.tie(0);cout.tie(0);
     //freopen("src/expr.data","r",stdin);
-    //freopen("src/naive.data","r",stdin);
+    //freopen("src/pi.data","r",stdin);
     //freopen("src/array_test1.data","r",stdin);
+    //freopen("out.txt","w",stdout);
+
     mem.getprogram();
-    //mem.show();
     while(1){
         unsigned int instcode=IF(reg.pc);
-        instruction *inst=parse(instcode);
-        //cerr<<hex<<reg.pc<<":"<<instcode<<"\t";inst->show();
-        if(inst->EX())  reg.pc+=4;
-        delete inst;
+        instruction  inst=ID(instcode);
+
+        //cerr<<hex<<reg.pc<<":"<<instcode<<"\t";inst.show();for(int i=0;i<32;++i) cout<<reg[i]<<" ";cout<<endl;
+        inst.EX();
+        inst.MA();
+        inst.WB();
     }
     return 0;
 }
