@@ -259,7 +259,7 @@ class SB:public instruction
     {
         int po=reg[rs1]+imm;
         if(po==0x30004){
-            cout<<(int)reg[10];//Wrong
+            cout<<(int)(reg[10]&255);//Wrong
             exit(0);
         }
         mem[po]=reg[rs2]&255;
@@ -273,7 +273,7 @@ class SH:public instruction
     {
         int po=reg[rs1]+imm;
         if(po==0x30004){
-            cout<<(int)reg[10];//Wrong
+            cout<<(int)(reg[10]&255);//Wrong
             exit(0);
         }
         mem[po]=reg[rs2]&255;mem[po+1]=(reg[rs2]>>8)&255;
@@ -287,7 +287,7 @@ class SW:public instruction
     {
         int po=reg[rs1]+imm;
         if(po==0x30004){
-            cout<<(int)reg[10];//Wrong
+            cout<<(int)(reg[10]&255);//Wrong
             exit(0);
         }
         mem[po]=reg[rs2]&255;mem[po+1]=(reg[rs2]>>8)&255;mem[po+2]=(reg[rs2]>>16)&255;mem[po+3]=(reg[rs2]>>24)&255;
