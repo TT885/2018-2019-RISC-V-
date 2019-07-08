@@ -36,7 +36,7 @@ public:
                 position=0;
                 int len=strlen(inst);
                 for(int i=1;i<len;++i)
-                    position=(position<<4)+(inst[i]>='0'&&inst[i]<='9'?inst[i]-'0':10+inst[i]-'A'); //ÎÊÌâ¾ÍÔÚ´Ë´¦£¡
+                    position=(position<<4)+(inst[i]>='0'&&inst[i]<='9'?inst[i]-'0':10+inst[i]-'A'); //é—®é¢˜å°±åœ¨æ­¤å¤„ï¼
             }
             else{
                 for(int i=0;i<2;++i)
@@ -105,7 +105,7 @@ public:
         case LUI:   res=imm;break;
         case AUIPC: res=respc+imm;break;
         case JAL:   res=respc+4;respc+=imm; flag=1;break;
-        case JALR:  res=respc+4;respc=tmp1+imm;flag=1;break; //pcÌø×ª·½·¨ºÍJALÍêÈ«²»Í¬
+        case JALR:  res=respc+4;respc=tmp1+imm;flag=1;break; //pcè·³è½¬æ–¹æ³•å’ŒJALå®Œå…¨ä¸åŒ
         case LB:
         case LH:
         case LW:
@@ -159,11 +159,11 @@ public:
     {
         if(opttype!=S && opttype!=B &&rd)
             reg[rd]=res,--reg.lock[rd];
-        if(flag)            reg.pc=respc,  reg.pclock=0,reg.pcstop=1;//ID½×¶Î»¹ÒªÌø×ª
+        if(flag)            reg.pc=respc,  reg.pclock=0,reg.pcstop=1;//IDé˜¶æ®µè¿˜è¦è·³è½¬
     }
 };
 
-instruction  ID (unsigned int instcode)  //»ùÀàÖ¸Õë£¬¶àÌ¬ÊµÏÖ
+instruction  ID (unsigned int instcode)  //åŸºç±»æŒ‡é’ˆï¼Œå¤šæ€å®žçŽ°
 {
     instruction  inst;
     int optc=instcode&127,func=(instcode>>12)&7;
@@ -240,7 +240,7 @@ instruction  ID (unsigned int instcode)  //»ùÀàÖ¸Õë£¬¶àÌ¬ÊµÏÖ
     break;
     case S: inst.rs1=(instcode>>15)&31;
     inst.rs2=(instcode>>20)&31;
-    inst.imm=(instcode>>7)&31;inst.imm+=((instcode>>25)&127)<<5;//optcode¿Ùµô£¡£¡
+    inst.imm=(instcode>>7)&31;inst.imm+=((instcode>>25)&127)<<5;//optcodeæŠ æŽ‰ï¼ï¼
     signedExtend(inst.imm,11);
     inst.tmp1=reg[inst.rs1];
     inst.tmp2=reg[inst.rs2];
@@ -259,7 +259,7 @@ instruction  ID (unsigned int instcode)  //»ùÀàÖ¸Õë£¬¶àÌ¬ÊµÏÖ
     if(optc==99 ||optc==103 ||optc==111)
         reg.pclock=1;
     if(!inst.delay){
-        if(inst.opttype!=B && inst.opttype!=S && inst.rd)  ++reg.lock[inst.rd];//lock register not 0! ²»ÄÜ×ÔËø
+        if(inst.opttype!=B && inst.opttype!=S && inst.rd)  ++reg.lock[inst.rd];//lock register not 0! ä¸èƒ½è‡ªé”
         if(!reg.pclock &&!reg.pcstop)
                 reg.pc+=4;
     }
@@ -267,8 +267,8 @@ instruction  ID (unsigned int instcode)  //»ùÀàÖ¸Õë£¬¶àÌ¬ÊµÏÖ
 }
 int main()
 {
-    //ios::sync_with_stdio(0);cin.tie(0);cout.tie(0);
-    freopen("src/expr.data","r",stdin);
+    ios::sync_with_stdio(0);cin.tie(0);cout.tie(0);
+    //freopen("src/expr.data","r",stdin);
     //freopen("output2.txt","w",stdout);
     mem.getprogram();
     queue<unsigned int> qID;
