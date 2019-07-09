@@ -77,7 +77,7 @@ class instruction
     bool flag;//jump
     OptionType       opttype;
     instruction_type insttype;
-    void judgeend()
+    inline void judgeend()
     {
         if(res==0x30004){
             cout<<dec<<(int)(reg[10]&255);
@@ -100,7 +100,7 @@ public:
         }
         cout<<"tmp1="<<tmp1<<" tmp2="<<tmp2<<" res="<<res<<"\n";
     }
-    void EX()
+    inline void EX()
     {
         bool Load=0;
         tmp1=reg.lock[rs1]?reg.locknum[rs1]:reg[rs1];
@@ -115,7 +115,7 @@ public:
         case LH:
         case LW:
         case LBU:
-        case LHU:   Load=1;
+        case LHU:
         case SB:
         case SH:
         case SW:
@@ -145,9 +145,54 @@ public:
         case BLTU:  flag=(unsigned int)tmp1< (unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
         case BGEU:  flag=(unsigned int)tmp1>=(unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
         }
+        /*switch(opttype){
+        case U:switch(insttype){
+            case LUI:   res=imm;break;
+            case AUIPC: res=respc+imm;break;
+            }break;
+        case J:res=respc+4;respc+=imm; flag=1;break;
+        case B:switch(insttype){
+            case BEQ:   flag=tmp1==tmp2;flag?respc+=imm:respc+=4,flag=1;break;
+            case BNE:   flag=tmp1!=tmp2;flag?respc+=imm:respc+=4,flag=1;break;
+            case BLT:   flag=(int)tmp1< (int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
+            case BGE:   flag=(int)tmp1>=(int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
+            case BLTU:  flag=(unsigned int)tmp1< (unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
+            case BGEU:  flag=(unsigned int)tmp1>=(unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
+            }break;
+        case S:res=tmp1+imm;break;
+        case I:switch(insttype){
+            case LB:
+            case LH:
+            case LW:
+            case LBU:
+            case LHU:   Load=1;
+            case ADDI:  res=tmp1+imm;break;
+            case SLTI:  res=(int)tmp1<(int)imm;break;
+            case SLTIU: res=(unsigned int)tmp1<(unsigned int)imm;break;
+            case XORI:  res=tmp1^imm;break;
+            case ORI:   res=tmp1|imm;break;
+            case ANDI:  res=tmp1&imm;break;
+            case SLLI:  res=tmp1<<imm;break;
+            case SRLI:  res=(unsigned int)tmp1>>imm;break;
+            case SRAI:  res=(int)tmp1>>imm;break;
+            case JALR:  res=respc+4;respc=tmp1+imm;flag=1;break;
+            }break;
+        case R:switch(insttype){
+            case ADD:   res=tmp1+tmp2;break;
+            case SUB:   res=tmp1-tmp2;break;
+            case SLL:   res=tmp1<<tmp2;break;
+            case SLT:   res=tmp1<tmp2;break;
+            case SLTU:  res=(unsigned int)tmp1<(unsigned int)tmp2;break;
+            case XOR:   res=tmp1^tmp2;break;
+            case SRL:   res=(unsigned int)tmp1>>tmp2;break;
+            case SRA:   res=(int)tmp1>>tmp2;break;
+            case OR:    res=tmp1|tmp2;break;
+            case AND:   res=tmp1&tmp2;break;
+            }break;
+        }//*/
         if(rd && !Load) ++reg.lock[rd],reg.locknum[rd]=res; //B,S rd=0,Load is I type, rewrite in MA.
     }
-    void MA()
+    inline void MA()
     {
         switch(insttype){
         case LB: if(rd) res=mem[res],signedExtend(res,8),                              ++reg.lock[rd],reg.locknum[rd]=res;break;
@@ -161,7 +206,7 @@ public:
         default:;
         }
     }
-    void WB()
+    inline void WB()
     {
         if(opttype!=S && opttype!=B &&rd)
             reg[rd]=res,--reg.lock[rd];// 若下一条语句也改写了寄存器那么锁区仍然存在
@@ -169,7 +214,7 @@ public:
     }
 };
 
-instruction  ID (unsigned int instcode)  //基类指针，多态实现
+inline instruction  ID (unsigned int instcode)  //基类指针，多态实现
 {
     instruction  inst;
     int optc=instcode&127,func=(instcode>>12)&7;
@@ -263,31 +308,25 @@ int main()
     //freopen("output2.txt","w",stdout);
     //freopen("src/pi.data","r",stdin);
     mem.getprogram();
-    queue<unsigned int> qID;
-    queue<instruction*> qEX,qMA,qWB;
-    instruction *inst;
+    unsigned int qID[8],hID=0,hEX=0,hMA=0,hWB=0,tID=0,tEX=0,tMA=0,tWB=0;
+    instruction *qEX[8],*qMA[8],*qWB[8],*inst;
     while(1){
-        if(!qWB.empty()){
-            qWB.front()->WB(),delete qWB.front(),qWB.pop();
+        if(hWB!=tWB){
+            qWB[hWB]->WB(),delete qWB[hWB],++hWB,hWB&=7;
         }
-        if(!qMA.empty()){
-          inst=qMA.front();
-          inst->MA();
-          qMA.pop();
-          qWB.push(inst);
+        if(hMA!=tMA){
+            qMA[hMA]->MA(),qWB[tWB]=qMA[hMA],++tWB,tWB&=7,++hMA,hMA&=7;
         }
-        if(!qEX.empty()){
-            inst=qEX.front();
-            inst->EX();
-            qEX.pop();
-            qMA.push(inst);
+        if(hEX!=tEX){
+            qEX[hEX]->EX(),qMA[tMA]=qEX[hEX],++tMA,tMA&=7,++hEX,hEX&=7;
         }
-        if(!qID.empty()){
-            inst=new instruction(ID(qID.front()));
-            qEX.push(inst),qID.pop();
+        if(hID!=tID){
+            inst=new instruction(ID(qID[hID]));
+            qEX[tEX]=inst, ++tEX,tEX&=7,++hID,hID&=7;
         }
-        if(!reg.pclock)
-            qID.push(IF(reg.pc));
+        if(!reg.pclock){
+            qID[tID]=IF(reg.pc),++tID,tID&=7;
+        }
         reg.pcstop=0;
         /*/cout<<hex<<reg.pc<<":\n";
         //cout<<qID.empty()<<" "<<qEX.empty()<<" "<<qMA.empty()<<" "<<qWB.empty()<<"\n";
