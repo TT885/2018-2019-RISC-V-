@@ -77,20 +77,6 @@ class instruction
     }
 public:
     instruction():flag(0),rd(0),rs1(0),rs2(0),res(0),tmp1(0),tmp2(0){}
-    void show()
-    {
-        cout<<instructiontype[insttype]<<" ";
-        switch(opttype)
-        {
-            case U:
-            case J:cout<<hex<<"rd="<<regname[rd]<<" imm="<<imm<<"\n";break;
-            case B:
-            case S:cout<<hex<<"imm="<<imm<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";break;
-            case I:cout<<hex<<"rd="<<regname[rd]<<" imm="<<imm<<" rs1="<<regname[rs1]<<"\n";break;
-            case R:cout<<hex<<"rd="<<regname[rd]<<" rs1="<<regname[rs1]<<" rs2="<<regname[rs2]<<"\n";break;
-        }
-        cout<<"tmp1="<<tmp1<<" tmp2="<<tmp2<<" res="<<res<<"\n";
-    }
     inline void EX()
     {
         bool Load=0;
