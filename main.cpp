@@ -7,17 +7,15 @@ class registers
 public:
     unsigned int x[32];
 
-    unsigned int lock[32],locknum[32];
+    unsigned int lock[32],locknum[32],loadlock[32];
     unsigned int pc;
     unsigned int pclock,pcstop;
-    registers(){pcstop=pclock=pc=x[0]=0; for(int i=0;i<32;++i) x[i]=lock[i]=0;}
+    registers(){pcstop=pclock=pc=x[0]=0; for(int i=0;i<32;++i) loadlock[i]=x[i]=lock[i]=0;}
     unsigned int &operator[](unsigned int rx)
     {
         return x[rx];
     }
 }reg;
-string regname[32]={"zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7","s2","s3","s4","s5","s6","s7","s8","s9","s10","s11","t3","t4","t5","t6"};
-
 class memory
 {
 public:
@@ -37,7 +35,7 @@ public:
                 position=0;
                 int len=strlen(inst);
                 for(int i=1;i<len;++i)
-                    position=(position<<4)+(inst[i]>='0'&&inst[i]<='9'?inst[i]-'0':10+inst[i]-'A'); //ÎÊÌâ¾ÍÔÚ´Ë´¦£¡
+                    position=(position<<4)+(inst[i]>='0'&&inst[i]<='9'?inst[i]-'0':10+inst[i]-'A'); //é—®é¢˜å°±åœ¨æ­¤å¤„ï¼
             }
             else{
                 for(int i=0;i<2;++i)
@@ -46,10 +44,7 @@ public:
             }
         }
     }
-    void show()
-    {
-        for(int i=0;i<0x1288;++i) if(a[i]) cout<<hex<<i<<":"<<(int)a[i]<<" "<<dec;
-    }
+    
 }mem;
 inline unsigned int signedExtend(unsigned int &data,int bits)
 {
@@ -64,15 +59,11 @@ enum OptionType{R,I,U,J,S,B};
 enum instruction_type{LUI,AUIPC,JAL,   //3
 JALR,LB,LH,LW,LBU,LHU,ADDI,SLTI,SLTIU,XORI,ORI,ANDI,SLLI,SRLI,SRAI,  //18
 ADD,SUB,SLL,SLT,SLTU,XOR,SRL,SRA,OR,AND,    //28
-BEQ,BNE,BLT,BGE,BLTU,BGEU,SB,SH,SW};    //37
-string instructiontype[37]={"LUI","AUIPC","JAL",
-"JALR","LB","LH","LW","LBU","LHU","ADDI","SLTI","SLTIU","XORI","ORI","ANDI","SLLI","SRLI","SRAI",  //18
-"ADD","SUB","SLL","SLT","SLTU","XOR","SRL","SRA","OR","AND",
-"BEQ","BNE","BLT","BGE","BLTU","BGEU","SB","SH","SW"};
+BEQ,BNE,BLT,BGE,BLTU,BGEU,SB,SH,SW};    
 
 class instruction
 {
-    friend instruction  ID(unsigned int instcode);
+    friend bool  ID(unsigned int instcode,instruction* &instp);
     unsigned int rd,rs1,rs2,imm,tmp1,tmp2,res,respc;
     bool flag;//jump
     OptionType       opttype;
@@ -103,19 +94,17 @@ public:
     inline void EX()
     {
         bool Load=0;
-        tmp1=reg.lock[rs1]?reg.locknum[rs1]:reg[rs1];
-        tmp2=reg.lock[rs2]?reg.locknum[rs2]:reg[rs2];
         if(reg.lock[rs2]) tmp2=reg.locknum[rs2];
         switch(insttype){
         case LUI:   res=imm;break;
         case AUIPC: res=respc+imm;break;
         case JAL:   res=respc+4;respc+=imm; flag=1;break;
-        case JALR:  res=respc+4;respc=tmp1+imm;flag=1;break; //pcÌø×ª·½·¨ºÍJALÍêÈ«²»Í¬
+        case JALR:  res=respc+4;respc=tmp1+imm;flag=1;break; 
         case LB:
         case LH:
         case LW:
         case LBU:
-        case LHU:
+        case LHU:    Load=1;
         case SB:
         case SH:
         case SW:
@@ -145,51 +134,6 @@ public:
         case BLTU:  flag=(unsigned int)tmp1< (unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
         case BGEU:  flag=(unsigned int)tmp1>=(unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
         }
-        /*switch(opttype){
-        case U:switch(insttype){
-            case LUI:   res=imm;break;
-            case AUIPC: res=respc+imm;break;
-            }break;
-        case J:res=respc+4;respc+=imm; flag=1;break;
-        case B:switch(insttype){
-            case BEQ:   flag=tmp1==tmp2;flag?respc+=imm:respc+=4,flag=1;break;
-            case BNE:   flag=tmp1!=tmp2;flag?respc+=imm:respc+=4,flag=1;break;
-            case BLT:   flag=(int)tmp1< (int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
-            case BGE:   flag=(int)tmp1>=(int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
-            case BLTU:  flag=(unsigned int)tmp1< (unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
-            case BGEU:  flag=(unsigned int)tmp1>=(unsigned int)tmp2;flag?respc+=imm:respc+=4,flag=1;break;
-            }break;
-        case S:res=tmp1+imm;break;
-        case I:switch(insttype){
-            case LB:
-            case LH:
-            case LW:
-            case LBU:
-            case LHU:   Load=1;
-            case ADDI:  res=tmp1+imm;break;
-            case SLTI:  res=(int)tmp1<(int)imm;break;
-            case SLTIU: res=(unsigned int)tmp1<(unsigned int)imm;break;
-            case XORI:  res=tmp1^imm;break;
-            case ORI:   res=tmp1|imm;break;
-            case ANDI:  res=tmp1&imm;break;
-            case SLLI:  res=tmp1<<imm;break;
-            case SRLI:  res=(unsigned int)tmp1>>imm;break;
-            case SRAI:  res=(int)tmp1>>imm;break;
-            case JALR:  res=respc+4;respc=tmp1+imm;flag=1;break;
-            }break;
-        case R:switch(insttype){
-            case ADD:   res=tmp1+tmp2;break;
-            case SUB:   res=tmp1-tmp2;break;
-            case SLL:   res=tmp1<<tmp2;break;
-            case SLT:   res=tmp1<tmp2;break;
-            case SLTU:  res=(unsigned int)tmp1<(unsigned int)tmp2;break;
-            case XOR:   res=tmp1^tmp2;break;
-            case SRL:   res=(unsigned int)tmp1>>tmp2;break;
-            case SRA:   res=(int)tmp1>>tmp2;break;
-            case OR:    res=tmp1|tmp2;break;
-            case AND:   res=tmp1&tmp2;break;
-            }break;
-        }//*/
         if(rd && !Load) ++reg.lock[rd],reg.locknum[rd]=res; //B,S rd=0,Load is I type, rewrite in MA.
     }
     inline void MA()
@@ -205,16 +149,23 @@ public:
         case SW: judgeend();mem[res]=tmp2&255;mem[res+1]=(tmp2>>8)&255;mem[res+2]=(tmp2>>16)&255;mem[res+3]=(tmp2>>24)&255;break;
         default:;
         }
+        switch(insttype){
+        case LB:
+        case LBU:
+        case LH:
+        case LHU:
+        case LW:     --reg.loadlock[rd];
+        }
     }
     inline void WB()
     {
         if(opttype!=S && opttype!=B &&rd)
-            reg[rd]=res,--reg.lock[rd];// ÈôÏÂÒ»ÌõÓï¾äÒ²¸ÄÐ´ÁË¼Ä´æÆ÷ÄÇÃ´ËøÇøÈÔÈ»´æÔÚ
-        if(flag)            reg.pc=respc,  reg.pclock=0,reg.pcstop=1;//ID½×¶Î»¹ÒªÌø×ª
+            reg[rd]=res,--reg.lock[rd];// è‹¥ä¸‹ä¸€æ¡è¯­å¥ä¹Ÿæ”¹å†™äº†å¯„å­˜å™¨é‚£ä¹ˆé”åŒºä»ç„¶å­˜åœ¨
+        if(flag)            reg.pc=respc,  reg.pclock=0,reg.pcstop=1;//IDé˜¶æ®µè¿˜è¦è·³è½¬
     }
 };
 
-inline instruction  ID (unsigned int instcode)  //»ùÀàÖ¸Õë£¬¶àÌ¬ÊµÏÖ
+inline bool  ID (unsigned int instcode,instruction* &instp)
 {
     instruction  inst;
     int optc=instcode&127,func=(instcode>>12)&7;
@@ -286,7 +237,7 @@ inline instruction  ID (unsigned int instcode)  //»ùÀàÖ¸Õë£¬¶àÌ¬ÊµÏÖ
     break;
     case S: inst.rs1=(instcode>>15)&31;
     inst.rs2=(instcode>>20)&31;
-    inst.imm=(instcode>>7)&31;inst.imm+=((instcode>>25)&127)<<5;//optcode¿Ùµô£¡£¡
+    inst.imm=(instcode>>7)&31;inst.imm+=((instcode>>25)&127)<<5;//optcodeæŠ æŽ‰ï¼ï¼
     signedExtend(inst.imm,11);
     break;
     case R: inst.rd=(instcode>>7)&31;
@@ -295,18 +246,24 @@ inline instruction  ID (unsigned int instcode)  //»ùÀàÖ¸Õë£¬¶àÌ¬ÊµÏÖ
     inst.imm=inst.rs2;
     break;
     }
+    if(reg.loadlock[inst.rs1] ||reg.loadlock[inst.rs2])
+        return 0;
+
+
     if(optc==99 ||optc==103 ||optc==111)
         reg.pclock=1;
     if(!reg.pclock &&!reg.pcstop)
         reg.pc+=4;
-    return inst;
+    if(optc==3)
+        ++reg.loadlock[inst.rd];
+    inst.tmp1=reg.lock[inst.rs1]?reg.locknum[inst.rs1]:reg[inst.rs1];
+    inst.tmp2=reg.lock[inst.rs2]?reg.locknum[inst.rs2]:reg[inst.rs2];
+    instp=new instruction(inst);
+    return 1;
 }
 int main()
 {
-    //ios::sync_with_stdio(0);cin.tie(0);cout.tie(0);
-    //freopen("src/array_test1.data","r",stdin);
-    //freopen("output2.txt","w",stdout);
-    //freopen("src/pi.data","r",stdin);
+    ios::sync_with_stdio(0);cin.tie(0);cout.tie(0);
     mem.getprogram();
     unsigned int qID[8],hID=0,hEX=0,hMA=0,hWB=0,tID=0,tEX=0,tMA=0,tWB=0;
     instruction *qEX[8],*qMA[8],*qWB[8],*inst;
@@ -320,24 +277,13 @@ int main()
         if(hEX!=tEX){
             qEX[hEX]->EX(),qMA[tMA]=qEX[hEX],++tMA,tMA&=7,++hEX,hEX&=7;
         }
-        if(hID!=tID){
-            inst=new instruction(ID(qID[hID]));
+        if(hID!=tID && ID(qID[hID],inst)){
             qEX[tEX]=inst, ++tEX,tEX&=7,++hID,hID&=7;
         }
-        if(!reg.pclock){
+        if(!reg.pclock && hID==tID){
             qID[tID]=IF(reg.pc),++tID,tID&=7;
         }
         reg.pcstop=0;
-        /*/cout<<hex<<reg.pc<<":\n";
-        //cout<<qID.empty()<<" "<<qEX.empty()<<" "<<qMA.empty()<<" "<<qWB.empty()<<"\n";
-        //if(reg.pc==0x109c) return 0;
-        if(!qID.empty()) cout<<hex<<qID.front()<<"\t";
-        if(!qEX.empty()) qEX.front()->show();
-        if(!qMA.empty()) qMA.front()->show();
-        if(!qWB.empty()) qWB.front()->show();//
-        for(int i=0;i<32;++i) cout<<reg[i]<<" ";cout<<endl;//
-        for(int i=0;i<32;++i) cout<<reg.lock[i]<<" ";cout<<endl;//
-        for(int i=0;i<32;++i) cout<<reg.locknum[i]<<" ";cout<<endl;//*/
     }
 
     return 0;
